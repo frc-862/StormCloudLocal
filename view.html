@@ -1,0 +1,53 @@
+<html>
+    <head>
+        <title>Local Management</title>
+        <link rel="stylesheet" href="style.css">
+        <style>
+
+            *{
+                font-family: 'Roboto', sans-serif;
+            }
+            
+
+        </style>
+    </head>
+    <body class="background">
+        <div class="center flex_center">
+            <div class="flex_center" style="width:600px">
+                <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
+                    <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="androidAttachedStatus"></div>
+                    <span class="text regular">Android Device</span>
+                </div>
+                <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
+                    <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="iosAttachedStatus"></div>
+                    <span class="text regular">iOS Device</span>
+                </div>
+            </div>
+        </div>
+        <script>
+            import * as io from 'socket.io-client';
+            const socket = io("http://localhost:3001");
+
+            socket.on("androidDevice", (data) => {
+                if(data){
+                    document.getElementById("androidAttachedStatus").classList.remove("whitebg");
+                    document.getElementById("androidAttachedStatus").classList.add("greenbg");
+                }else{
+                    document.getElementById("androidAttachedStatus").classList.remove("greenbg");
+                    document.getElementById("androidAttachedStatus").classList.add("whitebg");
+                }
+                
+            });
+            socket.on("iosDevice", (data) => {
+                if(data){
+                    document.getElementById("iosAttachedStatus").classList.remove("whitebg");
+                    document.getElementById("iosAttachedStatus").classList.add("greenbg");
+                }else{
+                    document.getElementById("iosAttachedStatus").classList.remove("greenbg");
+                    document.getElementById("iosAttachedStatus").classList.add("whitebg");
+                }
+                
+            });
+        </script>
+    </body>
+</html>
