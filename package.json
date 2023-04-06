@@ -16,6 +16,7 @@
     "bufferpack": "^0.0.6",
     "express": "^4.18.2",
     "nedb": "^1.8.0",
+    "nedb-async": "^0.1.6",
     "node-ios-device": "^3.2.1",
     "readline": "^1.3.0",
     "socket.io": "^4.6.1",

@@ -10,36 +10,80 @@ const net = require('net');
 const express = require('express');
 const axios = require('axios');
 
-const nedb = require('nedb');
-const matches = new nedb({filename: 'data/matches.db', autoload: true});
-const schemas = new nedb({filename: 'data/schemas.db', autoload: true});
-const analysises = new nedb({filename: 'data/analysises.db', autoload: true});
+const {AsyncNedb} = require('nedb-async');
+const matches = new AsyncNedb({filename: 'data/matches.db', autoload: true});
+const documents = new AsyncNedb({filename: 'data/documents.db', autoload: true});
+const schemas = new AsyncNedb({filename: 'data/schemas.db', autoload: true});
+const analysises = new AsyncNedb({filename: 'data/analysises.db', autoload: true});
+const rankings = new AsyncNedb({filename: 'data/rankings.db', autoload: true});
+const teams = new AsyncNedb({filename: 'data/teams.db', autoload: true});
+const analysisSets = new AsyncNedb({filename: 'data/analysisSets.db', autoload: true});
+
+var sendSettings = {
+    matches: true,
+    documents: true,
+    schemas: true,
+    analysises: true,
+    teams: true,
+    rankings: true
+}
 
 
 
 const app = express();
 const server = require('http').createServer(app);
-const io = require('socket.io')(server);
+const { Server } = require('socket.io');
+var socketPort = 3001;
+const io = new Server(socketPort, {
+    cors: {
+        origin: "http://localhost:3000",
+        methods: ["GET", "POST"]
+      }
+});
+
 
 var expressPort = 3000;
-var socketPort = 3001;
 
-server.listen(socketPort, () => {
-    console.log('Socket listening on port ' + socketPort);
-});
+
+
 
 var usbSettings = {
     iosEnable: true,
     androidEnable: true
 }
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
+
+    socket.emit('allSendback', sendSettings);
+    socket.emit('report', {
+        documents: await documents.asyncFind({})
+    })
+
     socket.on('configure', (data) => {
 
         usbSettings[data.setting] = data.value;
     });
+    socket.on('sendback', (data) => {
+        sendSettings[data.item] = data.status;
+    })
+    socket.on('exportData', async (data) => {
+        if(data == "documents"){
+            var docs = await documents.asyncFind({});
+            socket.emit('export', JSON.stringify(docs));
+        }
+    })
+    socket.on('clear', async (data) => {
+        if(data == "Android"){
+            androidChild = undefined;
+            androidChildSuccessful = false;
+            socketLog("Android: Cleared", "#f54242")
+        }
+    });
 });
 
+function socketLog(message, color){
+    io.emit('log', {message: message, color: color});
+}
 
 app.use(express.static('public'));
 
@@ -70,26 +114,55 @@ app.listen(expressPort, () => {
 
 
 
+async function getSendObject(){
+    var sendObject = {};
+    if(sendSettings.matches){
+        sendObject.matches = await matches.asyncFind({});
+
+        sendObject.matches = sendObject.matches.sort((a,b) => a.matchNumber - b.matchNumber);
+    }
+    if(sendSettings.documents){
+        sendObject.documents = await documents.asyncFind({});
+    }
+    if(sendSettings.schemas){
+        sendObject.schemas = await schemas.asyncFind({});
+    }
+    if(sendSettings.analysises){
+        sendObject.analysises = await analysises.asyncFind({});
+
+        // should be in format: {team: {}}
+    }
+    if(sendSettings.rankings){
+        sendObject.rankings = await rankings.asyncFind({});
+    }
+    if(sendSettings.teams){
+        sendObject.teams = await teams.asyncFind({});
+    }
+
+    return sendObject;
+}
 
 
 
-function handleIncomingData(data){
+
+async function handleIncomingData(data){
     var parsedData = JSON.parse(data);
     parsedData["matches"].forEach(function(match){
-        matches.find({Identifier: match.Identifier}, function(err, docs){
+        documents.find({Identifier: match.Identifier}, function(err, docs){
             if(docs.length == 0){
-                matches.insert(match);
-                console.log("Inserted new match: " + match.Identifier)
+                documents.insert(match);
+                socketLog("Inserted new match: " + match.Identifier, "#42f5c2")
             }
             else{
-                matches.update({Identifier: match.Identifier}, match);
-                console.log("Updated match: " + match.Identifier)
+                documents.update({Identifier: match.Identifier}, match);
+                socketLog("Updated match: " + match.Identifier, "#42f5c2")
             }
         });
     });
-    matches.find({}, function(err, docs){
-        io.emit('matches', docs);
-    });
+    var docs = await documents.asyncFind({});
+    io.emit('report', {
+        documents: await documents.asyncFind({})
+    })
 }
 
 
@@ -111,24 +184,49 @@ function beginiOSTracking(){
             if(usbSettings.iosEnable == false) return;
             
             usbmux.getTunnel(5050)
-            .then(function(tunnel) {
+            .then(async function(tunnel) {
                 // tunnel is just a net.Socket connection to the device port
                 // you can write / .on('data') it like normal
-                console.log("Established tunnel")
-                
+                socketLog("iOS: Established tunnel", "#42b0f5")
+                var messageToSend = JSON.stringify((await getSendObject()));
                 tunnel.write('greetings');
+                var messageSendLength = messageToSend.length;
                 var fullMessage = '';
+                var sendMode = false;
+                
                 tunnel.on('data', function(data) {
-                    console.log("Received data: " + data);
-                    if(data != "END"){
-                        fullMessage += data;
-                        
-                    }else{
-                        console.log("Full message: " + fullMessage);
-                        handleIncomingData(fullMessage);
-                        fullMessage = '';
+                    var dataString = data.toString();
+                    if(!sendMode){
+                        if(!dataString.startsWith("END")){
+                            fullMessage += data;
+                            
+                        }else{
+                            socketLog("iOS: Full message: " + fullMessage, "#42b0f5");
+                            handleIncomingData(fullMessage);
+                            fullMessage = '';
+                            sendMode = true;
+                        }
                     }
-                    tunnel.write('ok, and?');
+
+                    if(sendMode){
+                        if(messageToSend == ""){
+                            tunnel.write("END".padEnd(300, '\0'));
+
+                            io.emit('progress', 100);
+                            
+                        }else{
+                            tunnel.write(messageToSend.substring(0, 300).padEnd(300, '\0'));
+                            messageToSend = messageToSend.substring(300);
+
+                            io.emit('progress', 100-(messageToSend.length/messageSendLength)*100);
+                        }
+                    }else{
+                        tunnel.write(''.padEnd(300, '\0'));
+                        // clear out previous data in tunnel
+                        // tunnel.write(''.padEnd(300, '\0'));
+
+                    }
+                    
                 });
     
     
@@ -158,32 +256,64 @@ async function setupPortForward(){
 
     androidChild = spawn('adb', ['forward', 'tcp:5051', 'tcp:5050']);
     androidChild.stdout.on('data', (data) => {
-        console.log(`Android: ${data}`);
+        socketLog(`Android: ${data}`, "#f54242");
         
     });
-    androidChild.on('exit', (code) => {
+    androidChild.on('exit', async (code) => {
         
-        console.log(`Android: child process exited with code ${code}`);
+        socketLog(`Android: child process exited with code ${code}`, "#f54242");
         if(code == 0){
             if(usbSettings.androidEnable == false) return;
             androidChildSuccessful = true;
             androidSocketConnection = net.createConnection(5051);
+            var messageToSend = JSON.stringify((await getSendObject()));
+            
+
+            var messageSendLength = messageToSend.length;
+
             var finalMessage = '';
+            var sendMode = false;
+            androidSocketConnection.write('greetings');
             androidSocketConnection.on('data', (data) => {
                 // convert buffer to string
+
                 var string = data.toString();
-                console.log("Android Data: " + string);
-                if(!string.startsWith("END")){
-                    finalMessage += string;
-                    androidSocketConnection.write("ok, and?");
-                }else{
-                    console.log("Android Full Message: " + finalMessage);
-                    handleIncomingData(finalMessage);
-                    
-                    androidChild = undefined;
-                    androidChildSuccessful = false;
-                    finalMessage = '';
+                if(!sendMode){
+                    if(!string.startsWith("END")){
+                        finalMessage += string;
+                        
+                    }else{
+                        socketLog("Android Full Message: " + finalMessage, "#f54242");
+                        handleIncomingData(finalMessage);
+                        
+                        
+                        finalMessage = '';
+                        sendMode = true;
+                    }
                 }
+
+                if(sendMode){
+                    if(messageToSend == ""){
+                        androidSocketConnection.write("END".padEnd(300, '\0'));
+                        androidChild = undefined;
+                        androidChildSuccessful = false;
+
+                        io.emit('progress', 100);
+
+                        
+                    }else{
+                        androidSocketConnection.write(messageToSend.substring(0, 300).padEnd(300, '\0'));
+                        messageToSend = messageToSend.substring(300);
+
+                        io.emit('progress', 100-(messageToSend.length/messageSendLength)*100);
+                    }
+                }else{
+                    androidSocketConnection.write(''.padEnd(300, '\0'));
+                    // clear out previous data in tunnel
+                    // tunnel.write(''.padEnd(300, '\0'));
+
+                }
+                
                 
             });
 

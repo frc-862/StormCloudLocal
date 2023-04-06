@@ -13,39 +13,238 @@
     </head>
     <body class="background">
         <div class="center flex_center">
-            <div class="flex_center" style="width:600px">
-                <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
-                    <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="androidAttachedStatus"></div>
-                    <span class="text regular">Android Device</span>
+            
+            <div>
+                <div class="flex_center">
+                    <div class="level1bg container" style="padding:20px;border-radius:8px;margin:10px;width:600px">
+                        <span class="text important" style="font-weight: bold;margin:10px 0px">Export Data</span>
+                        
+                        <div class="flex_center">
+                            <div class="level2bg container clickable hover" style="padding:10px; margin:7px;pointer-events: all" onclick="exportData('clipboard')">
+                                <span class="text caption">By Clipboard</span>
+                            </div>
+                            <div class="level2bg container clickable hover" style="padding:10px; margin:7px;pointer-events: all" onclick="exportData('file')">
+                                <span class="text caption">By File</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
-                    <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="iosAttachedStatus"></div>
-                    <span class="text regular">iOS Device</span>
+                <div class="flex_center">
+                    <div class="level1bg container" style="padding:20px;border-radius:8px;margin:10px;width:600px">
+                        <span class="text important" style="font-weight: bold;margin:10px 0px">Current Documents</span>
+                        
+                        <div class="flex_center">
+                            <span class="text caption" id="numDocuments">You have 0 documents...</span>
+                        </div>
+                    </div>
                 </div>
+                <div class="flex_center">
+                    <div class="container level1bg" style="padding:20px;border-radius:8px;margin:10px">
+                        <span class="text important" style="font-weight: bold;margin:10px 0px">Send Data to Devices</span>
+                        <div class="flex_center" style="padding-top:10px">
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="matches" onclick="selectSendback('matches')">
+                                <span class="text caption">Matches</span>
+                            </div>
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="teams" onclick="selectSendback('teams')">
+                                <span class="text caption">Teams</span>
+                            </div>
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="rankings" onclick="selectSendback('rankings')">
+                                <span class="text caption">Rankings</span>
+                            </div>
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="analysises" onclick="selectSendback('analysises')">
+                                <span class="text caption">Analysises</span>
+                            </div>
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="schemas" onclick="selectSendback('schemas')">
+                                <span class="text caption">Schemas</span>
+                            </div>
+                            <div class="level2bg container clickable hover sendback" style="padding: 10px;margin:0px 10px" data-id="documents" onclick="selectSendback('documents')">
+                                <span class="text caption">Documents</span>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div class="flex_center" style="margin-top:20px">
+                    <div class="flex_center" style="width:600px">
+                        <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
+                            <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="androidAttachedStatus"></div>
+                            <span class="text regular">Android Device</span>
+                        </div>
+                        <div style="width:40%;border: 2px solid white;border-radius:8px;margin:0px 10px;padding:10px" class="flex_center">
+                            <div class="whitebg" style="width:30px;height:30px;border-radius:15px;margin:5px" id="iosAttachedStatus"></div>
+                            <span class="text regular">iOS Device</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex_center" style="margin:10px">
+                    <div class="level1bg container clickable hover" style="padding: 10px;margin:0px 10px" onclick="clearDevice('iOS')">
+                        <span class="text caption">Clear iOS Device</span>
+                    </div>
+                    <div class="level1bg container clickable hover" style="padding: 10px;margin:0px 10px" onclick="clearDevice('Android')">
+                        <span class="text caption">Clear Android Device</span>
+                    </div>
+                </div>
+                <div class="flex_center" style="margin:10px">
+                    <div class="container level1bg" id="progressContainer" style="width:600px;height:20px;border-radius:10px;padding:0px;display:none">
+                        <div id="progress" class="primarybg" style="width:0%;height:100%;border-radius:10px"></div>
+                    </div>
+                </div>
+                <div class="flex_center" style="margin:10px">
+                    <div class="input" style="width:600px;height:200px;overflow-y:scroll">
+                        <div id="logs"></div>
+                    </div>
+                </div>
+                
             </div>
-        </div>
-        <script>
-            import * as io from 'socket.io-client';
-            const socket = io("http://localhost:3001");
 
-            socket.on("androidDevice", (data) => {
-                if(data){
-                    document.getElementById("androidAttachedStatus").classList.remove("whitebg");
-                    document.getElementById("androidAttachedStatus").classList.add("greenbg");
+            
+        </div>
+        <script src="socket.io.js"></script>
+        <script>
+
+            var logs = [];
+            const socket = io("ws://localhost:3001", {
+                cors: {
+                    origin: "http://localhost:3000",
+                    methods: ["GET", "POST"]
+                  }
+            });
+            socket.on('allSendback', (data) => {
+                Object.keys(data).forEach((key) => {
+                    if(data[key]){
+                        if(!selectedSendbacks.includes(key)){
+                            selectedSendbacks.push(key);
+                        }
+                    }else{
+                        if(selectedSendbacks.includes(key)){
+                            selectedSendbacks.splice(selectedSendbacks.indexOf(key), 1);
+                        }
+                    }
+                });
+                updateSendbackItems();
+                
+            });
+
+            socket.on('progress', (data) => {
+                document.getElementById("progress").style.width = data + "%";
+
+                if(data == 100){
+                    document.getElementById("progress").style.backgroundColor = "#08503b";
                 }else{
-                    document.getElementById("androidAttachedStatus").classList.remove("greenbg");
-                    document.getElementById("androidAttachedStatus").classList.add("whitebg");
+                    document.getElementById("progress").style.backgroundColor = "";
+                }
+            })
+
+            socket.on('log', (data) => {
+
+                data.time = new Date().toLocaleTimeString();
+
+
+                logs.push(data);
+
+                // keep a max of 50 logs
+                if(logs.length > 50){
+                    logs.shift();
+                }
+                document.getElementById("logs").innerHTML = "";
+                logs.forEach((log) => {
+                    document.getElementById("logs").innerHTML += `<span class="text small" style="color:${log.color}">(${log.time}) ${log.message}</span>` + "<br>";
+                })
+            })
+
+            var selectedSendbacks = [];
+
+            function selectSendback(option){
+                if(selectedSendbacks.includes(option)){
+                    selectedSendbacks.splice(selectedSendbacks.indexOf(option), 1);
+                    socket.emit("sendback", {item: option, status: false});
+                }else{
+                    selectedSendbacks.push(option);
+                    socket.emit("sendback", {item: option, status: true});
+                }
+                updateSendbackItems();
+
+            }
+            function clearDevice(device){
+                socket.emit("clear", device);
+            }
+            function updateSendbackItems(){
+                Array.from(document.getElementsByClassName("sendback")).forEach((item) => {
+                    if(selectedSendbacks.includes(item.getAttribute("data-id"))){
+                        item.classList = "primarybg container clickable hover sendback";
+
+                    }else{
+                        item.classList = "level2bg container clickable hover sendback";
+                    }
+                })
+            }
+
+            socket.on('report', (data) => {
+                document.getElementById("numDocuments").innerHTML = "You have " + data.documents.length + " documents...";
+            })
+            var exportType = "clipboard"
+            socket.on('export', (data) => {
+                // copy to clipboard
+                if(exportType == "clipboard"){
+                    navigator.clipboard.writeText(data);
+                    alert("Copied to clipboard");
+                }else{
+                    // download
+                    var element = document.createElement('a');
+                    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(data));
+                    element.setAttribute('download', "export.json");
+
+                    element.style.display = 'none';
+                    document.body.appendChild(element);
+
+                    element.click();
+
+                    document.body.removeChild(element);
                 }
                 
             });
+
+            function exportData(type){
+                // copy
+                exportType = type;
+                socket.emit("exportData", "documents");
+            }
+
+
+            var androidShown = false;
+            var iosShown = false;
+
+            function updateHideProgressBar(){
+                if(!androidShown && !iosShown){
+                    document.getElementById("progressContainer").style.display = "none";
+                }else{
+                    document.getElementById("progressContainer").style.display = "";
+                }
+            }
+
+            socket.on("androidDevice", (data) => {
+                if(data){
+                    androidShown = true;
+                    document.getElementById("androidAttachedStatus").classList.remove("whitebg");
+                    document.getElementById("androidAttachedStatus").classList.add("greenbg");
+                }else{
+                    androidShown = false;
+                    document.getElementById("androidAttachedStatus").classList.remove("greenbg");
+                    document.getElementById("androidAttachedStatus").classList.add("whitebg");
+                }
+                updateHideProgressBar();
+            });
             socket.on("iosDevice", (data) => {
                 if(data){
+                    iosShown = true;
                     document.getElementById("iosAttachedStatus").classList.remove("whitebg");
                     document.getElementById("iosAttachedStatus").classList.add("greenbg");
                 }else{
+                    iosShown = false;
                     document.getElementById("iosAttachedStatus").classList.remove("greenbg");
                     document.getElementById("iosAttachedStatus").classList.add("whitebg");
                 }
+                updateHideProgressBar();
                 
             });
         </script>
